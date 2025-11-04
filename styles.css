@@ -1,0 +1,17 @@
+:root{
+--bg:#e7e8ea;
+--ink:#1f2937; 
+--ring:#8a8c90; 
+}
+
+body{background:var(--bg); color:var(--ink);}
+
+.chart{background:#f4f1f1;border:1px dashed var(--ring);border-radius:12px;padding:14px;display:flex;flex-direction:column;align-items:center}
+.bars{display:flex;gap:18px;align-items:flex-end;height:140px;justify-content:center;width:100%}
+.bar{width:28px;border-radius:6px}
+.bar.a{background:#ef4444;height:72%}
+.bar.b{background:#3b82f6;height:44%}
+.bar.c{background:#f59e0b;height:90%}
+.bar.d{background:#22c55e;height:38%}
+
+.card{border: radius 10px;}
