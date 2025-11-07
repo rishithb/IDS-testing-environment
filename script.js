@@ -4,23 +4,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const datasetInput = document.querySelector('input[placeholder="Select Dataset"]');
     const uploadButton = document.querySelector('button[aria-label="Upload"]');
     const modelSelect = document.querySelector('select.form-select'); // First form-select
-    const paramsSelect = document.querySelector('.col-md-4:last-child select.form-select'); // Parameters dropdown
     const runButton = document.querySelector('.btn-dark');
 
     // Make these elements globally available
     window.datasetInput = datasetInput;
     window.uploadButton = uploadButton;
     window.modelSelect = modelSelect;
-    window.paramsSelect = paramsSelect;
     window.runButton = runButton;
 
     // Initialize the page once elements are found
-    if (modelSelect && paramsSelect) {
+    if (modelSelect) {
         initializePage();
     } else {
         console.error('Required elements not found:', {
-            modelSelect: !!modelSelect,
-            paramsSelect: !!paramsSelect
+            modelSelect: !!modelSelect
         });
     }
 });
@@ -28,11 +25,11 @@ document.addEventListener('DOMContentLoaded', function() {
 // Store experiment history (Replace with actual storage later)
 let experimentHistory = [];
 
-// Available ML Models
+// Available ML Models - Only LCCDE active
 const mlModels = [
-    'Tree-based',
+    // 'Tree-based',
     'LCCDE',
-    'MTH-IDS'
+    // 'MTH-IDS'
 ];
 
 // Initialize the page
@@ -57,9 +54,6 @@ function setupEventListeners() {
     // Dataset upload handling
     uploadButton.addEventListener('click', handleDatasetUpload);
     
-    // Model selection change
-    modelSelect.addEventListener('change', handleModelChange);
-    
     // Run experiment
     runButton.addEventListener('click', handleRunExperiment);
 }
@@ -82,81 +76,6 @@ function handleDatasetUpload() {
     input.click();
 }
 
-// Handle model selection change
-function handleModelChange(e) {
-    const selectedModel = e.target.value;
-    console.log('Selected model:', selectedModel); // Debug selected model
-    updateModelParameters(selectedModel);
-}
-
-// Update parameters based on selected model
-function updateModelParameters(modelName) {
-    console.log('Updating parameters for model:', modelName); // Debug
-    
-    if (!paramsSelect) {
-        console.error('Parameters select element not found!');
-        return;
-    }
-    
-    // Clear existing options
-    paramsSelect.innerHTML = '<option>Model Parameters</option>';
-    
-    // Add parameters based on selected model
-    const parameters = getModelParameters(modelName);
-    console.log('Available parameters:', parameters); // Debug
-    
-    parameters.forEach(param => {
-        const option = document.createElement('option');
-        option.value = param.value;
-        option.textContent = param.label;
-        paramsSelect.appendChild(option);
-    });
-}
-
-// Get parameters for specific model
-function getModelParameters(modelName) {
-    const parameterMap = {
-        'tree-based': [
-            { value: 'max-depth-5', label: 'Max Depth: 5' },
-            { value: 'max-depth-10', label: 'Max Depth: 10' },
-            { value: 'max-depth-15', label: 'Max Depth: 15' },
-            { value: 'min-samples-3', label: 'Min Samples: 3' },
-            { value: 'min-samples-5', label: 'Min Samples: 5' },
-            { value: 'min-samples-7', label: 'Min Samples: 7' },
-            { value: 'n-estimators-50', label: 'N Estimators: 50' },
-            { value: 'n-estimators-100', label: 'N Estimators: 100' },
-            { value: 'criterion-gini', label: 'Criterion: Gini' },
-            { value: 'criterion-entropy', label: 'Criterion: Entropy' }
-        ],
-        'lccde': [
-            { value: 'num-clusters-3', label: 'Number of Clusters: 3' },
-            { value: 'num-clusters-5', label: 'Number of Clusters: 5' },
-            { value: 'num-clusters-7', label: 'Number of Clusters: 7' },
-            { value: 'threshold-0.5', label: 'Detection Threshold: 0.5' },
-            { value: 'threshold-0.7', label: 'Detection Threshold: 0.7' },
-            { value: 'threshold-0.9', label: 'Detection Threshold: 0.9' },
-            { value: 'distance-euclidean', label: 'Distance Metric: Euclidean' },
-            { value: 'distance-manhattan', label: 'Distance Metric: Manhattan' },
-            { value: 'init-kmeans++', label: 'Initialization: K-means++' },
-            { value: 'init-random', label: 'Initialization: Random' }
-        ],
-        'mth-ids': [
-            { value: 'threshold-0.6', label: 'Threshold: 0.6' },
-            { value: 'threshold-0.8', label: 'Threshold: 0.8' },
-            { value: 'threshold-0.9', label: 'Threshold: 0.9' },
-            { value: 'window-50', label: 'Window Size: 50' },
-            { value: 'window-100', label: 'Window Size: 100' },
-            { value: 'window-150', label: 'Window Size: 150' },
-            { value: 'history-size-1000', label: 'History Size: 1000' },
-            { value: 'history-size-5000', label: 'History Size: 5000' },
-            { value: 'mode-adaptive', label: 'Mode: Adaptive' },
-            { value: 'mode-static', label: 'Mode: Static' }
-        ]
-    };
-    
-    return parameterMap[modelName] || [];
-}
-
 // Handle running the experiment
 function handleRunExperiment() {
     if (!validateInputs()) {
@@ -165,8 +84,7 @@ function handleRunExperiment() {
 
     const experimentData = {
         dataset: datasetInput.value,
-        model: modelSelect.value,
-        parameters: paramsSelect.value
+        model: modelSelect.value
     };
 
     // TODO: Replace with actual API call
@@ -182,10 +100,6 @@ function validateInputs() {
     }
     if (modelSelect.value === 'Select Model') {
         alert('Please select a model');
-        return false;
-    }
-    if (paramsSelect.value === 'Model Parameters') {
-        alert('Please select model parameters');
         return false;
     }
     return true;
