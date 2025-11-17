@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const runButton = document.querySelector('.run-button');
 
     // Make these elements globally available
-    window.datasetInput = datasetInput;
+    window.datasetInput = datasetInput;~~
     window.uploadButton = uploadButton;
     window.modelSelect = modelSelect;
     window.runButton = runButton;
