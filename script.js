@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadButton = document.querySelector('button[aria-label="Upload"]');
     const modelSelect = document.querySelector('select.form-select'); // First form-select
     const paramsSelect = document.querySelector('.col-md-4:last-child select.form-select'); // Parameters dropdown
-    const runButton = document.querySelector('.btn-dark');
+    const runButton = document.querySelector('.run-button');
 
     // Make these elements globally available
     window.datasetInput = datasetInput;
@@ -48,20 +48,48 @@ function populateModelDropdown() {
         const option = document.createElement('option');
         option.value = model.toLowerCase().replace(/\s+/g, '-');
         option.textContent = model;
-        modelSelect.appendChild(option);
+    window.modelSelect.appendChild(option);
     });
 }
 
 // Setup event listeners
 function setupEventListeners() {
     // Dataset upload handling
-    uploadButton.addEventListener('click', handleDatasetUpload);
+    window.uploadButton.addEventListener('click', handleDatasetUpload);
     
     // Model selection change
-    modelSelect.addEventListener('change', handleModelChange);
+    window.modelSelect.addEventListener('change', handleModelChange);
     
     // Run experiment
-    runButton.addEventListener('click', handleRunExperiment);
+    window.runButton.addEventListener('click', testFunction);
+
+}
+
+function testFunction() {
+    const experimentData = {
+        dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
+        model: window.modelSelect.value,
+        parameters: window.paramsSelect.value
+    };
+    console.log('Running experiment with:', experimentData);
+
+    fetch('http://127.0.0.1:5000/lccde', {
+        method: 'POST',
+        body: JSON.stringify(experimentData),
+        cache: 'no-cache',
+        headers: new Headers({
+            'content-type': 'application/json'
+        })
+    }).then(function(response) {
+        if (response.status !== 200) {
+            console.log('Response status not 200:', response.status);
+            return ;
+        }
+        console.log('Response received from backend');
+        response.json().then(function(data) {
+            console.log('LCCDE data:', data);
+        });
+    })
 }
 
 // Handle dataset upload
@@ -73,7 +101,7 @@ function handleDatasetUpload() {
     input.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            datasetInput.value = file.name;
+            window.datasetInput.value = file.name;
             // TODO: Add actual file upload logic here
             console.log('Selected file:', file.name);
         }
@@ -93,13 +121,13 @@ function handleModelChange(e) {
 function updateModelParameters(modelName) {
     console.log('Updating parameters for model:', modelName); // Debug
     
-    if (!paramsSelect) {
+    if (!window.paramsSelect) {
         console.error('Parameters select element not found!');
         return;
     }
     
     // Clear existing options
-    paramsSelect.innerHTML = '<option>Model Parameters</option>';
+    window.paramsSelect.innerHTML = '<option>Model Parameters</option>';
     
     // Add parameters based on selected model
     const parameters = getModelParameters(modelName);
@@ -109,7 +137,7 @@ function updateModelParameters(modelName) {
         const option = document.createElement('option');
         option.value = param.value;
         option.textContent = param.label;
-        paramsSelect.appendChild(option);
+    window.paramsSelect.appendChild(option);
     });
 }
 
@@ -162,29 +190,93 @@ function handleRunExperiment() {
     if (!validateInputs()) {
         return;
     }
-
     const experimentData = {
-        dataset: datasetInput.value,
-        model: modelSelect.value,
-        parameters: paramsSelect.value
+        dataset: window.datasetInput.value,
+        model: window.modelSelect.value,
+        parameters: window.paramsSelect.value
     };
-
-    // TODO: Replace with actual API call
     console.log('Running experiment with:', experimentData);
-    simulateExperiment();
+    // Call backend API to run LCCDE (GET)
+    runLCCDEExperimentGET();
+}
+
+// Run LCCDE experiment via backend API using Axios GET
+async function runLCCDEExperimentGET() {
+    // Show loading state
+    window.runButton.disabled = true;
+    window.runButton.textContent = 'Running...';
+
+    // Update button text periodically to show it's still working
+    let dots = 0;
+    const loadingInterval = setInterval(() => {
+        dots = (dots + 1) % 4;
+        window.runButton.textContent = 'Running' + '.'.repeat(dots);
+    }, 500);
+
+    try {
+        // GET to backend via axios (backend expects GET /run)
+        console.log('Sending GET request to backend (axios)...');
+        const response = await axios.get('http://127.0.0.1:5000/lccde', {
+            // 0 means no timeout in axios (it will rely on browser limits)
+            timeout: 0
+        });
+
+        clearInterval(loadingInterval);
+
+        const data = response.data;
+
+        // Log the full response
+        console.log('Backend response:', data);
+
+        if (data.success) {
+            const result = data.result;
+            // Log LCCDE results
+            console.log('LCCDE Results:', {
+                meta: result.meta,
+                lccde: result.lccde,
+                base_f1: result.base_f1
+            });
+
+            // Convert to percentage for UI (backend returns decimals like 0.98)
+            const metrics = {
+                accuracy: (result.lccde.accuracy * 100).toFixed(1),
+                precision: (result.lccde.precision * 100).toFixed(1),
+                recall: (result.lccde.recall * 100).toFixed(1),
+                f1Score: (result.lccde.f1 * 100).toFixed(1)
+            };
+
+            console.log('Formatted metrics for UI:', metrics);
+            // Update the UI
+            // updateResults(metrics);
+        } else {
+            console.error('Backend error:', data.error);
+            alert('Error running experiment: ' + data.error);
+        }
+    } catch (error) {
+        clearInterval(loadingInterval);
+        const msg = (error.response && error.response.data && error.response.data.error)
+            ? error.response.data.error
+            : error.message || 'Unknown error';
+        console.error('Axios request failed:', error);
+    alert('Failed to connect to backend: ' + msg + '\n\nMake sure Flask server is running on http://127.0.0.1:5000 (GET /run)');
+    } finally {
+        // Reset button
+        window.runButton.disabled = false;
+        window.runButton.textContent = 'Run Experiment';
+    }
 }
 
 // Validate inputs before running experiment
 function validateInputs() {
-    if (!datasetInput.value) {
+    if (!window.datasetInput.value) {
         alert('Please select a dataset');
         return false;
     }
-    if (modelSelect.value === 'Select Model') {
+    if (window.modelSelect.value === 'Select Model') {
         alert('Please select a model');
         return false;
     }
-    if (paramsSelect.value === 'Model Parameters') {
+    if (window.paramsSelect.value === 'Model Parameters') {
         alert('Please select model parameters');
         return false;
     }
@@ -235,7 +327,7 @@ function updateResults(metrics) {
     const modelName = document.querySelector('select').value;
     
     // Update model name
-    resultsDiv.querySelector('p.text-secondary').textContent = `Model: ${modelName}`;
+    resultsDiv.querySelector('p.text-secondary').textContent = `Model: ${modelName.toUpperCase()}`;
     
     // Update metrics
     const metricDivs = resultsDiv.querySelectorAll('.col-12 div');
