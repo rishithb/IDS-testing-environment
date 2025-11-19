@@ -25,6 +25,7 @@ import xgboost as xgb
 import time
 from river import stream
 from statistics import mode
+import uuid
 
 # Import the LCCDE experiment function
 
@@ -41,10 +42,111 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 executor = ProcessPoolExecutor(max_workers=2)
 
 @app.route('/testing', methods=['POST'])
+def testing():
+	test_result = {
+    "results": {
+        "base_models": {
+            "catboost_f1_per_class": [
+                0.9974025974025974,
+                0.9922279792746114,
+                1,
+                0.9959183673469387,
+                0.7692307692307693,
+                0.9913793103448276,
+                0.9944629014396457
+            ],
+            "lightgbm_f1_per_class": [
+                0.9984962406015038,
+                0.9935316946959897,
+                1,
+                0.9983633387888707,
+                0.8571428571428571,
+                0.9935483870967742,
+                0.9988925802879292
+            ],
+            "xgboost_f1_per_class": [
+                0.997949979499795,
+                0.9909208819714657,
+                1,
+                0.9991836734693877,
+                0.8571428571428571,
+                0.9913793103448276,
+                0.9966703662597114
+            ]
+        },
+        "lccde": {
+            "accuracy": 0.9977611940298508,
+            "average_f1": 0.9977357558566934,
+            "f1_per_class": [
+                0.9984962406015038,
+                0.9935316946959897,
+                1,
+                0.9983633387888707,
+                0.8571428571428571,
+                0.9935483870967742,
+                0.9988925802879292
+            ],
+            "precision": 0.9977684737806599,
+            "recall": 0.9977611940298508
+            }
+        }
+    }
+	"""
+	{
+    "results": {
+        "base_models": {
+            "catboost_f1_per_class": [
+                0.9974025974025974,
+                0.9922279792746114,
+                1,
+                0.9959183673469387,
+                0.7692307692307693,
+                0.9913793103448276,
+                0.9944629014396457
+            ],
+            "lightgbm_f1_per_class": [
+                0.9984962406015038,
+                0.9935316946959897,
+                1,
+                0.9983633387888707,
+                0.8571428571428571,
+                0.9935483870967742,
+                0.9988925802879292
+            ],
+            "xgboost_f1_per_class": [
+                0.997949979499795,
+                0.9909208819714657,
+                1,
+                0.9991836734693877,
+                0.8571428571428571,
+                0.9913793103448276,
+                0.9966703662597114
+            ]
+        },
+        "lccde": {
+            "accuracy": 0.9977611940298508,
+            "average_f1": 0.9977357558566934,
+            "f1_per_class": [
+                0.9984962406015038,
+                0.9935316946959897,
+                1,
+                0.9983633387888707,
+                0.8571428571428571,
+                0.9935483870967742,
+                0.9988925802879292
+            ],
+            "precision": 0.9977684737806599,
+            "recall": 0.9977611940298508
+        }
+    }
+}
+	"""
+	return test_result
 
 @app.route('/lccde', methods=['POST'])
 def lccde():
 	req = request.get_json()
+	run_id = str(uuid.uuid4())[:4]
 	print(req)
 	try:
 		df = pd.read_csv("CICIDS2017_sample_km.csv")
@@ -52,7 +154,7 @@ def lccde():
 		print("Error: data/CICIDS2017_sample_km.csv not found. Make sure you run this from the repository root and the data file exists in the data/ folder.")
 		return
 
-	print("Label distribution:\n", df.Label.value_counts())
+	print(f"[RUN {run_id}]Label distribution:\n", df.Label.value_counts())
 
 	# Split
 	X = df.drop(['Label'], axis=1)
@@ -76,7 +178,7 @@ def lccde():
 	lg = lgb.LGBMClassifier()
 	lg.fit(X_train, y_train)
 	y_pred_lg = lg.predict(X_test)
-	print('\nLightGBM results:\n', classification_report(y_test, y_pred_lg))
+	# print('\nLightGBM results:\n', classification_report(y_test, y_pred_lg))
 	lg_f1 = f1_score(y_test, y_pred_lg, average=None)
 
 	print('\nTraining XGBoost...')
@@ -86,14 +188,14 @@ def lccde():
 	X_test_x = X_test.values
 	xg.fit(X_train_x, y_train)
 	y_pred_xg = xg.predict(X_test_x)
-	print('\nXGBoost results:\n', classification_report(y_test, y_pred_xg))
+	# print('\nXGBoost results:\n', classification_report(y_test, y_pred_xg))
 	xg_f1 = f1_score(y_test, y_pred_xg, average=None)
 
 	print('\nTraining CatBoost...')
 	cb = cbt.CatBoostClassifier(verbose=0, boosting_type='Plain')
 	cb.fit(X_train, y_train)
 	y_pred_cb = cb.predict(X_test)
-	print('\nCatBoost results:\n', classification_report(y_test, y_pred_cb))
+	# print('\nCatBoost results:\n', classification_report(y_test, y_pred_cb))
 	cb_f1 = f1_score(y_test, y_pred_cb, average=None)
 
 	# Build leading model list per class

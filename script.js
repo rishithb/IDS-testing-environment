@@ -4,12 +4,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const datasetInput = document.querySelector('input[placeholder="Select Dataset"]');
     const uploadButton = document.querySelector('button[aria-label="Upload"]');
     const modelSelect = document.querySelector('select.form-select'); // First form-select
-    const runButton = document.querySelector('.btn-dark');
     const paramsSelect = document.querySelector('.col-md-4:last-child select.form-select'); // Parameters dropdown
     const runButton = document.querySelector('.run-button');
 
     // Make these elements globally available
-    window.datasetInput = datasetInput;~~
+    window.datasetInput = datasetInput;
     window.uploadButton = uploadButton;
     window.modelSelect = modelSelect;
     window.runButton = runButton;
@@ -57,7 +56,7 @@ function setupEventListeners() {
     window.uploadButton.addEventListener('click', handleDatasetUpload);
     
     // Run experiment
-    window.runButton.addEventListener('click', testFunction);
+    window.runButton.addEventListener('click', handleRunExperiment);
 
 }
 
@@ -65,11 +64,13 @@ function testFunction() {
     const experimentData = {
         dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
         model: window.modelSelect.value,
-        parameters: window.paramsSelect.value
+        // parameters: window.paramsSelect.value
     };
+    let result = {}
+    let metrics = {}
     console.log('Running experiment with:', experimentData);
 
-    fetch('http://127.0.0.1:5000/lccde', {
+    fetch('http://127.0.0.1:5000/testing', {
         method: 'POST',
         body: JSON.stringify(experimentData),
         cache: 'no-cache',
@@ -84,8 +85,17 @@ function testFunction() {
         console.log('Response received from backend');
         response.json().then(function(data) {
             console.log('LCCDE data:', data);
+            result = data;
+            metrics = {
+                accuracy: (result.lccde.accuracy * 100).toFixed(1),
+                precision: (result.lccde.precision * 100).toFixed(1),
+                recall: (result.lccde.recall * 100).toFixed(1),
+                f1Score: (result.lccde.f1 * 100).toFixed(1)
+            };
         });
     })
+
+    console.log('Metrics:', metrics);
 }
 
 // Handle dataset upload
@@ -108,84 +118,55 @@ function handleDatasetUpload() {
 
 // Handle running the experiment
 function handleRunExperiment() {
-    if (!validateInputs()) {
+    /*if (!validateInputs()) {
         return;
-    }
+    } */
+
     const experimentData = {
-        dataset: window.datasetInput.value,
+        dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
         model: window.modelSelect.value,
-        parameters: window.paramsSelect.value
+        // parameters: window.paramsSelect.value
     };
-    console.log('Running experiment with:', experimentData);
-    // Call backend API to run LCCDE (GET)
-    runLCCDEExperimentGET();
-}
+    let results_json = {}
+    let metrics = {}
 
-// Run LCCDE experiment via backend API using Axios GET
-async function runLCCDEExperimentGET() {
-    // Show loading state
-    window.runButton.disabled = true;
-    window.runButton.textContent = 'Running...';
-
-    // Update button text periodically to show it's still working
-    let dots = 0;
-    const loadingInterval = setInterval(() => {
-        dots = (dots + 1) % 4;
-        window.runButton.textContent = 'Running' + '.'.repeat(dots);
-    }, 500);
-
-    try {
-        // GET to backend via axios (backend expects GET /run)
-        console.log('Sending GET request to backend (axios)...');
-        const response = await axios.get('http://127.0.0.1:5000/lccde', {
-            // 0 means no timeout in axios (it will rely on browser limits)
-            timeout: 0
-        });
-
-        clearInterval(loadingInterval);
-
-        const data = response.data;
-
-        // Log the full response
-        console.log('Backend response:', data);
-
-        if (data.success) {
-            const result = data.result;
-            // Log LCCDE results
-            console.log('LCCDE Results:', {
-                meta: result.meta,
-                lccde: result.lccde,
-                base_f1: result.base_f1
-            });
-
-            // Convert to percentage for UI (backend returns decimals like 0.98)
-            const metrics = {
-                accuracy: (result.lccde.accuracy * 100).toFixed(1),
-                precision: (result.lccde.precision * 100).toFixed(1),
-                recall: (result.lccde.recall * 100).toFixed(1),
-                f1Score: (result.lccde.f1 * 100).toFixed(1)
-            };
-
-            console.log('Formatted metrics for UI:', metrics);
-            // Update the UI
-            // updateResults(metrics);
-        } else {
-            console.error('Backend error:', data.error);
-            alert('Error running experiment: ' + data.error);
+    fetch('http://127.0.0.1:5000/lccde', {
+        method: 'POST',
+        body: JSON.stringify(experimentData),
+        cache: 'no-cache',
+        headers: new Headers({
+            'content-type': 'application/json'
+        })
+    }).then(function(response) {
+        if (response.status !== 200) {
+            console.log('Response status not 200:', response.status);
+            return ;
         }
-    } catch (error) {
-        clearInterval(loadingInterval);
-        const msg = (error.response && error.response.data && error.response.data.error)
-            ? error.response.data.error
-            : error.message || 'Unknown error';
-        console.error('Axios request failed:', error);
-    alert('Failed to connect to backend: ' + msg + '\n\nMake sure Flask server is running on http://127.0.0.1:5000 (GET /run)');
-    } finally {
-        // Reset button
-        window.runButton.disabled = false;
-        window.runButton.textContent = 'Run Experiment';
-    }
+        console.log('Response received from backend');
+        response.json().then(function(data) {
+            results_json = data;
+            /*metrics = {
+                accuracy: (result_json.results.lccde.accuracy * 100).toFixed(3),
+                precision: (result_json.results.lccde.precision * 100).toFixed(3),
+                recall: (result_json.results.lccde.recall * 100).toFixed(3),
+                f1Score: (result_json.results.lccde.average_f1 * 100).toFixed(3),
+            };
+            results_json.results.lccde.accuracy = (results_json.results.lccde.accuracy * 100).toFixed(3)
+            results_json.results.lccde.precision = (results_json.results.lccde.precision * 100).toFixed(3)
+            results_json.results.lccde.recall = (results_json.results.lccde.recall * 100).toFixed(3)
+            results_json.results.lccde.average_f1 = (results_json.results.lccde.average_f1 * 100).toFixed(3)
+            */
+            console.log('Metrics:', results_json);
+            updateResults(results_json);
+        });
+    })
+
+    
+
+    // TODO: Replace with actual API call
+    console.log('Running experiment with:', experimentData);
 }
+
 
 // Validate inputs before running experiment
 function validateInputs() {
@@ -203,8 +184,8 @@ function validateInputs() {
 // Simulate experiment results (replace with actual API during integration)
 function simulateExperiment() {
     // Show loading state
-    runButton.disabled = true;
-    runButton.textContent = 'Running...';
+    window.runButton.disabled = true;
+    window.runButton.textContent = 'Running...';
 
     setTimeout(() => {
         // Generate random results between 70 and 95
@@ -219,22 +200,30 @@ function simulateExperiment() {
         updateResults(results);
 
         // Reset button
-        runButton.disabled = false;
-        runButton.textContent = 'Run Experiment';
+        window.runButton.disabled = false;
+        window.runButton.textContent = 'Run Experiment';
     }, 2000);
 }
 
 // Clear performance comparison section
 function clearPerformanceComparison() {
     const chartContainer = document.getElementById('performanceChart');
+    const subChartContainer = document.getElementById('subPerformanceChart');
     if (!chartContainer) {
         console.error('Performance chart container not found');
+        return;
+    }
+    if (!subChartContainer) {
+        console.error('Sub Performance chart container not found');
         return;
     }
     
     // Clear the existing chart if it exists
     if (performanceChart) {
         performanceChart.destroy();
+    }
+    if (subPerformanceChart) {
+        subPerformanceChart.destroy();
     }
 }
 
@@ -248,10 +237,10 @@ function updateResults(metrics) {
     
     // Update metrics
     const metricDivs = resultsDiv.querySelectorAll('.col-12 div');
-    metricDivs[0].textContent = `${metrics.accuracy}%`;
-    metricDivs[1].textContent = `${metrics.precision}%`;
-    metricDivs[2].textContent = `${metrics.recall}%`;
-    metricDivs[3].textContent = `${metrics.f1Score}%`;
+    metricDivs[0].textContent = `${(metrics.results.lccde.accuracy * 100).toFixed(3)}%`;
+    metricDivs[1].textContent = `${(metrics.results.lccde.precision * 100).toFixed(3)}%`;
+    metricDivs[2].textContent = `${(metrics.results.lccde.recall * 100).toFixed(3)}%`;
+    metricDivs[3].textContent = `${(metrics.results.lccde.average_f1 * 100).toFixed(3)}%`;
 
     // Add to experiment history
     experimentHistory.push({
@@ -268,6 +257,7 @@ function updateResults(metrics) {
 
 // Chart reference
 let performanceChart = null;
+let subPerformanceChart = null;
 
 // Format date function
 function formatDate(date) {
@@ -287,6 +277,7 @@ function updateExperimentHistory() {
     historyList.innerHTML = ''; // Clear existing history
     
     experimentHistory.forEach((experiment, index) => {
+        console.log('Adding experiment to history:', experiment);
         const li = document.createElement('li');
         li.className = 'mb-2 d-flex align-items-center justify-content-between';
         li.innerHTML = `
@@ -401,10 +392,14 @@ function setupSearchAndSort() {
 // Update performance comparison chart
 function updatePerformanceComparison() {
     const ctx = document.getElementById('performanceChart');
+    const sub_ctz = document.getElementById('subPerformanceChart');
     
     // Destroy existing chart if it exists
     if (performanceChart) {
         performanceChart.destroy();
+    }
+    if (subPerformanceChart) {
+        subPerformanceChart.destroy();
     }
 
     // Get all checked experiments
@@ -437,10 +432,10 @@ function updatePerformanceComparison() {
         return {
             label: `Run ${experiment.runNumber} (${experiment.modelName})`,
             data: [
-                parseFloat(experiment.accuracy),
-                parseFloat(experiment.precision),
-                parseFloat(experiment.recall),
-                parseFloat(experiment.f1Score)
+                parseFloat(experiment.results.lccde.accuracy * 100),
+                parseFloat(experiment.results.lccde.precision * 100),
+                parseFloat(experiment.results.lccde.recall * 100),
+                parseFloat(experiment.results.lccde.average_f1 * 100)
             ],
             backgroundColor: color.bg,
             borderColor: color.border,
@@ -452,7 +447,130 @@ function updatePerformanceComparison() {
         labels: ['Accuracy', 'Precision', 'Recall', 'F1 Score'],
         datasets: datasets
     };
+    const subConfig = {
+        type: 'radar',
+        data: {
+            labels: ['0', '1', '2', '3', '4', '5', '6'],
+            datasets: [{
+                label: 'CatBoost',
+                data: [94, 91, 92, 93, 90, 95, 89],
+                fill: true,
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgb(255, 99, 132)',
+                pointBackgroundColor: 'rgb(255, 99, 132)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(255, 99, 132)'
+            },
+            {
+                label: 'XGBoost',
+                data: [96, 99, 93, 95, 92, 93, 95],
+                fill: true,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgb(54, 162, 235)',
+                pointBackgroundColor: 'rgb(54, 162, 235)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(54, 162, 235)'
+            },
+            {
+                label: 'LightGTM',
+                data: [92, 94, 99, 97, 96, 98, 90],
+                fill: true,
+                backgroundColor: 'rgba(64, 235, 98, 0.2)',
+                borderColor: 'rgba(47, 134, 50, 1)',
+                pointBackgroundColor: 'rgb(54, 162, 235)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(54, 162, 235)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    angleLines: {
+                        display: false
+                    },
+                    suggestedMax: 100,
+                },
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        font: {
+                            size: 12
+                        },
+                        padding: 15
+                    }
+                }
+            }
+        }
+    }
+    const config = {
+        type: 'bar',
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: {
+                        display: true,
+                        drawBorder: true,
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        },
 
+                    },
+                    title: {
+                        display: true,
+                        text: 'Percentage',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: true
+                    },
+                    title: {
+                        display: true,
+                        text: 'Metrics',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: selectedExperiments.length > 1,
+                    position: 'top',
+                    labels: {
+                        font: {
+                            size: 12
+                        },
+                        padding: 15
+                    }
+                }
+            }
+        }
+    };
+    /*
     const config = {
         type: 'bar',
         data: data,
@@ -514,7 +632,8 @@ function updatePerformanceComparison() {
                 }
             }
         }
-    };
+    }; */
 
     performanceChart = new Chart(ctx, config);
+    subPerformanceChart = new Chart(sub_ctz, subConfig);
 }
