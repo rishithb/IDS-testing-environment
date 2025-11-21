@@ -2,7 +2,6 @@ CREATE TABLE IF NOT EXISTS uploaded_datasets (
     dataset_id     SERIAL PRIMARY KEY,
     uploaded_at    TIMESTAMPTZ NOT NULL,
     original_name  TEXT        NOT NULL,
-    stored_path    TEXT        NOT NULL,
     file_bytes     BYTEA       NOT NULL
 );
 
