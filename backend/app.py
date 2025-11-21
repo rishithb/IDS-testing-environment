@@ -5,7 +5,7 @@ This version directly imports and calls the run_experiment function from
 the LCCDE module for better performance and error handling.
 """
 
-from flask import Flask, make_response, request, jsonify
+from flask import Flask, make_response, request, jsonify, Blueprint
 from flask_cors import CORS
 import os
 import tempfile
@@ -26,20 +26,33 @@ import time
 from river import stream
 from statistics import mode
 import uuid
+from config import Config
+from DBmodels import db, Experiment, Metric
 
 # Import the LCCDE experiment function
 
 
 # Create the Flask app and enable CORS for local development.
 app = Flask(__name__)
+app.config.from_object(Config)
 CORS(app)  # remove/lock down in production
+
+# Initialize database with app
+db.init_app(app)
+
+# Import and register blueprints after db is initialized
+from routes import api_bp
+app.register_blueprint(api_bp, url_prefix='/db-api')
+
+# Create tables if they don't exist
+with app.app_context():
+    # Import models to register them
+    import DBmodels
+    db.create_all()
 
 # Directory to store uploaded files temporarily.
 UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'uploads'))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Process pool for running experiments with timeout protection
-executor = ProcessPoolExecutor(max_workers=2)
 
 @app.route('/testing', methods=['POST'])
 def testing():
@@ -146,7 +159,8 @@ def testing():
 @app.route('/lccde', methods=['POST'])
 def lccde():
 	req = request.get_json()
-	run_id = str(uuid.uuid4())[:4]
+	run_id = str(uuid.uuid4())[:8]  # Use 8 chars for hex conversion
+	run_id_int = int(run_id, 16)  # Convert hex string to integer
 	print(req)
 	try:
 		df = pd.read_csv("CICIDS2017_sample_km.csv")
@@ -308,35 +322,36 @@ def lccde():
 			}
 		}
 	}
-	res = make_response(jsonify({"message": "LCCDE endpoint reached"}), 200)
-	###response = make_response(jsonify(runLCCDE()), 200)
+	
+	# Save experiment to database
+	new_exp = Experiment(
+		experiment_name = f"LCCDE-{run_id}",
+		status = 'completed'
+	)
+	db.session.add(new_exp)
+	db.session.flush()  # Get experiment_id before commit
+	
+	# Save LCCDE metrics
+	metrics = [
+		Metric(experiment_id=new_exp.experiment_id, metric_name='lccde_accuracy', metric_value=accuracy_score(yt, yp)),
+		Metric(experiment_id=new_exp.experiment_id, metric_name='lccde_precision', metric_value=precision_score(yt, yp, average='weighted')),
+		Metric(experiment_id=new_exp.experiment_id, metric_name='lccde_recall', metric_value=recall_score(yt, yp, average='weighted')),
+		Metric(experiment_id=new_exp.experiment_id, metric_name='lccde_average_f1', metric_value=f1_score(yt, yp, average='weighted'))
+	]
+	
+	# Save base model F1 scores (average across all classes)
+	metrics.extend([
+		Metric(experiment_id=new_exp.experiment_id, metric_name='lightgbm_avg_f1', metric_value=float(lg_f1.mean())),
+		Metric(experiment_id=new_exp.experiment_id, metric_name='xgboost_avg_f1', metric_value=float(xg_f1.mean())),
+		Metric(experiment_id=new_exp.experiment_id, metric_name='catboost_avg_f1', metric_value=float(cb_f1.mean()))
+	])
+	
+	db.session.add_all(metrics)
+	db.session.commit()
+	
 	return result_json
 
-def test():
-    print("hi")
-
-    """
-    Endpoint: POST /run
-
-    Runs the LCCDE experiment on the default CSV file.
-    """
-
-    # Use the default CSV file from uploads folder (absolute path)
-    ### path = 'CICIDS2017_sample_km.csv'
-    """
-    req = request.get_json()
-    path = req.get('dataset')
-
-    print(req)
-
-    res = make_response(jsonify({"message": "LCCDE endpoint reached"}), 200)
-    response = make_response(jsonify(runLCCDE()), 200)
-
-    return response
-    """
-    
-    
 
 if __name__ == '__main__':
     # Run in debug mode on port 5000 for local development.
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

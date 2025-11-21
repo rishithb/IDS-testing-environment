@@ -38,6 +38,7 @@ function initializePage() {
     populateModelDropdown();
     setupEventListeners();
     clearPerformanceComparison();
+    //updateExperimentHistory();
 }
 
 // Populate ML Model dropdown
@@ -57,45 +58,28 @@ function setupEventListeners() {
     
     // Run experiment
     window.runButton.addEventListener('click', handleRunExperiment);
+    //window.runButton.addEventListener('click', testFunction);
 
 }
 
-function testFunction() {
+async function testFunction() {
     const experimentData = {
-        dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
-        model: window.modelSelect.value,
+        // dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
+        // model: window.modelSelect.value,
         // parameters: window.paramsSelect.value
     };
-    let result = {}
-    let metrics = {}
-    console.log('Running experiment with:', experimentData);
 
-    fetch('http://127.0.0.1:5000/testing', {
-        method: 'POST',
-        body: JSON.stringify(experimentData),
+    const response = await fetch('http://127.0.0.1:5000/db-api/experiments', {
+        method: 'GET',
         cache: 'no-cache',
         headers: new Headers({
             'content-type': 'application/json'
         })
-    }).then(function(response) {
-        if (response.status !== 200) {
-            console.log('Response status not 200:', response.status);
-            return ;
-        }
-        console.log('Response received from backend');
-        response.json().then(function(data) {
-            console.log('LCCDE data:', data);
-            result = data;
-            metrics = {
-                accuracy: (result.lccde.accuracy * 100).toFixed(1),
-                precision: (result.lccde.precision * 100).toFixed(1),
-                recall: (result.lccde.recall * 100).toFixed(1),
-                f1Score: (result.lccde.f1 * 100).toFixed(1)
-            };
-        });
-    })
-
-    console.log('Metrics:', metrics);
+    });
+    
+    const result = await response.json();
+    console.log("DB Test Data:", result);
+    return result;
 }
 
 // Handle dataset upload
@@ -268,27 +252,31 @@ function formatDate(date) {
     const hours = d.getHours() % 12 || 12;
     const minutes = d.getMinutes().toString().padStart(2, '0');
     const ampm = d.getHours() >= 12 ? 'PM' : 'AM';
-    return `${month}/${day}/${year}, ${hours}:${minutes} ${ampm}`;
+    return `${month}/${day}/${year} - ${hours}:${minutes} ${ampm}`;
 }
 
 // Update experiment history list
-function updateExperimentHistory() {
+async function updateExperimentHistory() {
     const historyList = document.getElementById('experiment-history');
     historyList.innerHTML = ''; // Clear existing history
+
+    const experiments = await testFunction();
     
-    experimentHistory.forEach((experiment, index) => {
+    experiments.forEach((experiment, index) => {
         console.log('Adding experiment to history:', experiment);
         const li = document.createElement('li');
         li.className = 'mb-2 d-flex align-items-center justify-content-between';
         li.innerHTML = `
             <div>
-                <input class="form-check-input me-2" type="checkbox" id="r${experiment.runNumber}" 
-                       ${index === experimentHistory.length - 1 ? 'checked' : ''}>
-                <label for="r${experiment.runNumber}">Run ${experiment.runNumber} (${experiment.modelName})</label>
+                <input class="form-check-input me-2" type="checkbox" id="r${experiment.experiment_name}" 
+                       ${index === experiments.length - 1 ? 'checked' : ''}>
+                <label for="r${experiment.experiment_name}">Run ${experiment.experiment_name}</label>
             </div>
-            <small class="text-muted">${formatDate(experiment.timestamp)}</small>
+            <small class="text-muted">${formatDate(experiment.run_timestamp)}</small>
         `;
-        li.dataset.date = experiment.timestamp; // Store date for sorting
+        li.dataset.date = experiment.run_timestamp; // Store date for sorting
+        // under experiment name
+        //  ${index === experimentHistory.length - 1 ? 'checked' : ''}>
         
         // Add change event listener to checkbox
         const checkbox = li.querySelector('input[type="checkbox"]');
@@ -303,12 +291,13 @@ function updateExperimentHistory() {
 
 // Setup search and sort functionality
 let searchSortSetup = false;
-function setupSearchAndSort() {
+async function setupSearchAndSort() {
     if (searchSortSetup) return;
     searchSortSetup = true;
 
     const searchInput = document.getElementById('experimentSearch');
     const historyList = document.getElementById('experiment-history');
+    const experiments = await testFunction();
     
     function updateSearchResults() {
         const searchTerm = searchInput.value.toLowerCase().trim();
@@ -316,11 +305,11 @@ function setupSearchAndSort() {
 
         if (searchTerm === '') {
             // If no search term, show all experiments
-            displayExperiments(experimentHistory);
+            displayExperiments(experiments);
         } else {
             // Filter experiments by date
-            const matchingExperiments = experimentHistory.filter(exp => {
-                const d = new Date(exp.timestamp);
+            const matchingExperiments = experiments.filter(exp => {
+                const d = new Date(exp.run_timestamp);
                 const expDate = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear()}`;
                 return expDate.includes(searchTerm);
             });
@@ -343,18 +332,18 @@ function setupSearchAndSort() {
             li.className = 'mb-2 d-flex align-items-center justify-content-between';
             
             // Check if this experiment is currently checked
-            const currentCheckbox = document.getElementById(`r${experiment.runNumber}`);
+            const currentCheckbox = document.getElementById(`r${experiment.experiment_name}`);
             const isChecked = currentCheckbox ? currentCheckbox.checked : (index === experiments.length - 1);
             
             li.innerHTML = `
                 <div>
-                    <input class="form-check-input me-2" type="checkbox" id="r${experiment.runNumber}" 
+                    <input class="form-check-input me-2" type="checkbox" id="r${experiment.experiment_name}" 
                            ${isChecked ? 'checked' : ''}>
-                    <label for="r${experiment.runNumber}">Run ${experiment.runNumber} (${experiment.modelName})</label>
+                    <label for="r${experiment.experiment_name}">Run ${experiment.experiment_name} (${experiment.model_id})</label>
                 </div>
-                <small class="text-muted">${formatDate(experiment.timestamp)}</small>
+                <small class="text-muted">${formatDate(experiment.run_timestamp)}</small>
             `;
-            li.dataset.date = experiment.timestamp;
+            li.dataset.date = experiment.run_timestamp;
             
             // Add change event listener to checkbox
             const checkbox = li.querySelector('input[type="checkbox"]');
@@ -390,9 +379,10 @@ function setupSearchAndSort() {
 }
 
 // Update performance comparison chart
-function updatePerformanceComparison() {
+async function updatePerformanceComparison() {
     const ctx = document.getElementById('performanceChart');
     const sub_ctz = document.getElementById('subPerformanceChart');
+    const experiments = await testFunction();
     
     // Destroy existing chart if it exists
     if (performanceChart) {
@@ -407,10 +397,10 @@ function updatePerformanceComparison() {
     const selectedExperiments = [];
     
     checkedBoxes.forEach(checkbox => {
-        const runNumber = parseInt(checkbox.id.replace('r', ''));
-        const experiment = experimentHistory.find(exp => exp.runNumber === runNumber);
-        if (experiment) {
-            selectedExperiments.push(experiment);
+        const run = checkbox.id.replace('r', '');
+        const exp = experiments.find(EXP => EXP.experiment_name === run);
+        if (exp) {
+            selectedExperiments.push(exp);
         }
     });
 
@@ -430,12 +420,12 @@ function updatePerformanceComparison() {
     const datasets = selectedExperiments.map((experiment, index) => {
         const color = colors[index % colors.length];
         return {
-            label: `Run ${experiment.runNumber} (${experiment.modelName})`,
+            label: `Run ${experiment.experiment_name} (${experiment.model_id})`,
             data: [
-                parseFloat(experiment.results.lccde.accuracy * 100),
-                parseFloat(experiment.results.lccde.precision * 100),
-                parseFloat(experiment.results.lccde.recall * 100),
-                parseFloat(experiment.results.lccde.average_f1 * 100)
+                experiment.metrics.find(m => m.metric_name === 'lccde_accuracy')?.metric_value * 100,
+                experiment.metrics.find(m => m.metric_name === 'lccde_precision')?.metric_value * 100,
+                experiment.metrics.find(m => m.metric_name === 'lccde_recall')?.metric_value * 100,
+                experiment.metrics.find(m => m.metric_name === 'lccde_average_f1')?.metric_value * 100
             ],
             backgroundColor: color.bg,
             borderColor: color.border,

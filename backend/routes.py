@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
-from models import db, Experiment, Metric, Parameter
+from DBmodels import db, Experiment, Metric, Parameter
 
-api_bp = Blueprint('api', __name__)
+api_bp = Blueprint('db-api', __name__)
 
 @api_bp.route('/experiments', methods=['GET'])
 def list_experiments():
     experiments = Experiment.query.all()
+    """
     data = [
         {
             "experiment_id": e.experiment_id,
@@ -16,6 +17,8 @@ def list_experiments():
         for e in experiments
     ]
     return jsonify(data)
+    """
+    return jsonify([e.to_dict() for e in experiments])
 
 
 @api_bp.route('/experiments', methods=['POST'])

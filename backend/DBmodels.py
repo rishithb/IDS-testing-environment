@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
+# Create db instance here (will be initialized in app.py)
 db = SQLAlchemy()
 
 # ---------------- USERS ----------------
@@ -57,6 +58,21 @@ class Experiment(db.Model):
     parameters = db.relationship('Parameter', cascade='all, delete', back_populates='experiment')
     metrics = db.relationship('Metric', cascade='all, delete', back_populates='experiment')
     logs = db.relationship('Log', cascade='all, delete', back_populates='experiment')
+
+    def to_dict(self):
+        return {
+            'experiment_id': self.experiment_id,
+            'user_id': self.user_id,
+            'model_id': self.model_id,
+            'dataset_id': self.dataset_id,
+            'experiment_name': self.experiment_name,
+            'run_timestamp': self.run_timestamp.isoformat() if self.run_timestamp else None,
+            'status': self.status,
+            'notes': self.notes,
+            'parameters': [{'param_name': p.param_name, 'param_value': p.param_value} for p in self.parameters],
+            'metrics': [{'metric_name': m.metric_name, 'metric_value': m.metric_value} for m in self.metrics],
+            'logs': [{'log_message': l.log_message, 'log_level': l.log_level, 'created_at': l.created_at.isoformat() if l.created_at else None} for l in self.logs]
+        }
 
 
 # ---------------- PARAMETERS ----------------
