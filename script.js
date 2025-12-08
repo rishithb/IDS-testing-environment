@@ -4,14 +4,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const datasetInput = document.querySelector('input[placeholder="Select Dataset"]');
     const uploadButton = document.querySelector('button[aria-label="Upload"]');
     const modelSelect = document.querySelector('select.form-select'); // First form-select
-    const paramsSelect = document.querySelector('.col-md-4:last-child select.form-select'); // Parameters dropdown
+    const kMeans = document.getElementById('kmeans'); // K-means input
+    const smoteCount = document.getElementById('smote'); // SMOTE input
     const runButton = document.querySelector('.run-button');
+    const smoteCheck = document.getElementById('smote-check');
 
     // Make these elements globally available
     window.datasetInput = datasetInput;
     window.uploadButton = uploadButton;
     window.modelSelect = modelSelect;
+    window.kMeans = kMeans;
     window.runButton = runButton;
+    window.smoteCount = smoteCount;
+    window.smoteCheck = smoteCheck;
+    window.smoteCheck.addEventListener('change', () => {
+        window.smoteCount.style.display = window.smoteCheck.checked ? 'block' : 'none';
+        window.smoteCount.value = '';
+    });
 
     // Initialize the page once elements are found
     if (modelSelect) {
@@ -28,9 +37,9 @@ let experimentHistory = [];
 
 // Available ML Models - Only LCCDE active
 const mlModels = [
-    // 'Tree-based',
-    'LCCDE',
-    // 'MTH-IDS'
+    'Tree-based',
+    //'LCCDE',
+    'MTH-IDS'
 ];
 
 // Initialize the page
@@ -38,7 +47,7 @@ function initializePage() {
     populateModelDropdown();
     setupEventListeners();
     clearPerformanceComparison();
-    //updateExperimentHistory();
+    updateExperimentHistory();
 }
 
 // Populate ML Model dropdown
@@ -63,12 +72,6 @@ function setupEventListeners() {
 }
 
 async function testFunction() {
-    const experimentData = {
-        // dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
-        // model: window.modelSelect.value,
-        // parameters: window.paramsSelect.value
-    };
-
     const response = await fetch('http://127.0.0.1:5000/db-api/experiments', {
         method: 'GET',
         cache: 'no-cache',
@@ -78,7 +81,6 @@ async function testFunction() {
     });
     
     const result = await response.json();
-    console.log("DB Test Data:", result);
     return result;
 }
 
@@ -109,10 +111,13 @@ function handleRunExperiment() {
     const experimentData = {
         dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
         model: window.modelSelect.value,
-        // parameters: window.paramsSelect.value
+        parameters: {
+            clusters: parseInt(window.kMeans.value) ? parseInt(window.kMeans.value) : 1000,
+            smote: window.smoteCheck.checked ? parseInt(window.smoteCount.value) : null
+        }
     };
+    console.log('Experiment Data:', experimentData);
     let results_json = {}
-    let metrics = {}
 
     fetch('http://127.0.0.1:5000/lccde', {
         method: 'POST',
@@ -258,6 +263,13 @@ function formatDate(date) {
 // Update experiment history list
 async function updateExperimentHistory() {
     const historyList = document.getElementById('experiment-history');
+    
+    // Store currently checked experiment IDs before clearing
+    const currentlyChecked = new Set();
+    document.querySelectorAll('#experiment-history input[type="checkbox"]:checked').forEach(checkbox => {
+        currentlyChecked.add(checkbox.id);
+    });
+
     historyList.innerHTML = ''; // Clear existing history
 
     const experiments = await testFunction();
@@ -266,17 +278,24 @@ async function updateExperimentHistory() {
         console.log('Adding experiment to history:', experiment);
         const li = document.createElement('li');
         li.className = 'mb-2 d-flex align-items-center justify-content-between';
+        
+        const checkboxId = `r${experiment.experiment_name}`;
+        // Check if this was previously checked OR if it's the newest experiment
+        const shouldBeChecked = currentlyChecked.has(checkboxId) || index === experiments.length - 1;
+        
+        // Get cluster and SMOTE parameters
+        const clustersParam = experiment.parameters.find(p => p.param_name === 'clusters')?.param_value || 'N/A';
+        const smoteParam = experiment.parameters.find(p => p.param_name === 'smote_samples')?.param_value || 'N/A';
+        
         li.innerHTML = `
             <div>
-                <input class="form-check-input me-2" type="checkbox" id="r${experiment.experiment_name}" 
-                       ${index === experiments.length - 1 ? 'checked' : ''}>
-                <label for="r${experiment.experiment_name}">Run ${experiment.experiment_name}</label>
+                <input class="form-check-input me-2" type="checkbox" id="${checkboxId}" 
+                       ${shouldBeChecked ? 'checked' : ''}>
+                <label for="${checkboxId}">Run ${experiment.experiment_name} (K=${clustersParam}, SMOTE=${smoteParam})</label>
             </div>
             <small class="text-muted">${formatDate(experiment.run_timestamp)}</small>
         `;
         li.dataset.date = experiment.run_timestamp; // Store date for sorting
-        // under experiment name
-        //  ${index === experimentHistory.length - 1 ? 'checked' : ''}>
         
         // Add change event listener to checkbox
         const checkbox = li.querySelector('input[type="checkbox"]');
@@ -335,11 +354,15 @@ async function setupSearchAndSort() {
             const currentCheckbox = document.getElementById(`r${experiment.experiment_name}`);
             const isChecked = currentCheckbox ? currentCheckbox.checked : (index === experiments.length - 1);
             
+            // Get cluster and SMOTE parameters
+            const clustersParam = experiment.parameters.find(p => p.param_name === 'clusters')?.param_value || 'N/A';
+            const smoteParam = experiment.parameters.find(p => p.param_name === 'smote_samples')?.param_value || 'N/A';
+            
             li.innerHTML = `
                 <div>
                     <input class="form-check-input me-2" type="checkbox" id="r${experiment.experiment_name}" 
                            ${isChecked ? 'checked' : ''}>
-                    <label for="r${experiment.experiment_name}">Run ${experiment.experiment_name} (${experiment.model_id})</label>
+                    <label for="r${experiment.experiment_name}">Run ${experiment.experiment_name} (K=${clustersParam}, SMOTE=${smoteParam})</label>
                 </div>
                 <small class="text-muted">${formatDate(experiment.run_timestamp)}</small>
             `;
@@ -416,11 +439,14 @@ async function updatePerformanceComparison() {
         { bg: 'rgba(236, 72, 153, 0.7)', border: 'rgb(236, 72, 153)' }     // Pink
     ];
 
+
     // Create datasets for each selected experiment
     const datasets = selectedExperiments.map((experiment, index) => {
+        const clustersParam = experiment.parameters.find(p => p.param_name === 'clusters')?.param_value || 'N/A';
+        const smoteParam = experiment.parameters.find(p => p.param_name === 'smote_samples')?.param_value || 'N/A';
         const color = colors[index % colors.length];
         return {
-            label: `Run ${experiment.experiment_name} (${experiment.model_id})`,
+            label: `Run ${experiment.experiment_name} (${`K=${clustersParam}, SMOTE=${smoteParam}`})`,
             data: [
                 experiment.metrics.find(m => m.metric_name === 'lccde_accuracy')?.metric_value * 100,
                 experiment.metrics.find(m => m.metric_name === 'lccde_precision')?.metric_value * 100,

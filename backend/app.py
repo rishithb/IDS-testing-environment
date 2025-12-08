@@ -27,7 +27,7 @@ from river import stream
 from statistics import mode
 import uuid
 from config import Config
-from DBmodels import db, Experiment, Metric
+from DBmodels import db, Experiment, Metric, Parameter
 
 # Import the LCCDE experiment function
 
@@ -159,14 +159,30 @@ def testing():
 @app.route('/lccde', methods=['POST'])
 def lccde():
 	req = request.get_json()
-	run_id = str(uuid.uuid4())[:8]  # Use 8 chars for hex conversion
-	run_id_int = int(run_id, 16)  # Convert hex string to integer
+	
+	# Get the next run ID based on database count
+	experiment_count = Experiment.query.count()
+	run_id = f"{experiment_count + 1:03d}"  # e.g., "RUN-0001", "RUN-0002"
+	
 	print(req)
 	try:
 		df = pd.read_csv("CICIDS2017_sample_km.csv")
 	except FileNotFoundError:
 		print("Error: data/CICIDS2017_sample_km.csv not found. Make sure you run this from the repository root and the data file exists in the data/ folder.")
 		return
+
+	# Get parameters from nested object
+	params = req.get('parameters', {})
+	clusters = params.get('clusters')  # default 1000
+	smote_samples = params.get('smote')  # default 1000
+	if clusters is None:
+		clusters = 1000  # enforce default
+	if smote_samples is None:
+		smote_samples = 1000  # enforce default
+	if smote_samples < 100:
+		smote_samples = 100  # enforce minimum
+	print(f"[RUN {run_id}]Clusters received:", clusters)
+	print(f"[RUN {run_id}]SMOTE settings received:", smote_samples)
 
 	print(f"[RUN {run_id}]Label distribution:\n", df.Label.value_counts())
 
@@ -180,10 +196,36 @@ def lccde():
 	# Some imbalanced-learn versions do not accept the `n_jobs` parameter in SMOTE.__init__.
 	# Try to construct with n_jobs first, otherwise fall back without it for compatibility.
 	try:
-		smote = SMOTE(n_jobs=-1, sampling_strategy={2:1000, 4:1000})
+		smote = SMOTE(n_jobs=-1, sampling_strategy={2:smote_samples, 4:smote_samples})
 	except TypeError:
-		smote = SMOTE(sampling_strategy={2:1000, 4:1000})
+		smote = SMOTE(sampling_strategy={2:smote_samples, 4:smote_samples})
 	X_train, y_train = smote.fit_resample(X_train, y_train)
+
+	"""
+	# Check current class counts
+	train_label_counts = pd.Series(y_train).value_counts()
+	print(f"\n[RUN {run_id}]Original training label counts:\n", train_label_counts)
+
+	# SMOTE for class imbalance - only if requested samples > existing samples
+	if smote_samples and smote_samples > 0:
+		# Check if SMOTE would actually increase samples for target classes
+		class_2_count = train_label_counts.get(2, 0)
+		class_4_count = train_label_counts.get(4, 0)
+		
+		if smote_samples > class_2_count or smote_samples > class_4_count:
+			from imblearn.over_sampling import SMOTE
+			print(f"[RUN {run_id}]Applying SMOTE to upsample classes 2 and 4 to {smote_samples} samples")
+			try:
+				smote = SMOTE(n_jobs=-1, sampling_strategy={2:smote_samples, 4:smote_samples})
+			except TypeError:
+				smote = SMOTE(sampling_strategy={2:smote_samples, 4:smote_samples})
+			X_train, y_train = smote.fit_resample(X_train, y_train)
+			print('\nAfter SMOTE label counts:\n', pd.Series(y_train).value_counts())
+		else:
+			print(f"[RUN {run_id}]Skipping SMOTE - requested samples ({smote_samples}) <= existing samples (class 2: {class_2_count}, class 4: {class_4_count})")
+	else:
+		print(f"[RUN {run_id}]Skipping SMOTE - no SMOTE samples specified")
+	"""
 
 	print('\nAfter SMOTE label counts:\n', pd.Series(y_train).value_counts())
 
@@ -326,6 +368,7 @@ def lccde():
 	# Save experiment to database
 	new_exp = Experiment(
 		experiment_name = f"LCCDE-{run_id}",
+
 		status = 'completed'
 	)
 	db.session.add(new_exp)
@@ -346,7 +389,14 @@ def lccde():
 		Metric(experiment_id=new_exp.experiment_id, metric_name='catboost_avg_f1', metric_value=float(cb_f1.mean()))
 	])
 	
+	# Save parameters
+	parameters = [
+		Parameter(experiment_id=new_exp.experiment_id, param_name='clusters', param_value=str(clusters)),
+		Parameter(experiment_id=new_exp.experiment_id, param_name='smote_samples', param_value=str(smote_samples))
+	]
+	
 	db.session.add_all(metrics)
+	db.session.add_all(parameters)
 	db.session.commit()
 	
 	return result_json
