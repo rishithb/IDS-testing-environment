@@ -5,6 +5,8 @@ This version directly imports and calls the run_experiment function from
 the LCCDE module for better performance and error handling.
 """
 
+from unittest import result
+from click import group
 from flask import Flask, make_response, request, jsonify, Blueprint
 from flask_cors import CORS
 import os
@@ -12,6 +14,8 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor, TimeoutError as FuturesTimeoutError
 import traceback
 import warnings
+
+from sklearn.calibration import LabelEncoder
 warnings.filterwarnings("ignore")
 import pandas as pd
 import numpy as np
@@ -185,6 +189,48 @@ def lccde():
 	print(f"[RUN {run_id}]SMOTE settings received:", smote_samples)
 
 	print(f"[RUN {run_id}]Label distribution:\n", df.Label.value_counts())
+
+	# Z-score normalization
+	features = df.dtypes[df.dtypes != 'object'].index
+	df[features] = df[features].apply(
+    lambda x: (x - x.mean()) / (x.std()))
+	# Fill empty values by 0
+	df = df.fillna(0)
+
+	labelencoder = LabelEncoder()
+	df.iloc[:, -1] = labelencoder.fit_transform(df.iloc[:, -1])
+
+	# retain the minority class instances and sample the majority class instances
+	df_minor = df[(df['Label']==6)|(df['Label']==1)|(df['Label']==4)|(df['Label']==2)]
+	df_major = df.drop(df_minor.index)
+
+	X = df_major.drop(['Label'],axis=1) 
+	y = df_major.iloc[:, -1].values.reshape(-1,1)
+	y=np.ravel(y)
+	# use k-means to cluster the data samples and select a proportion of data from each cluster
+	from sklearn.cluster import MiniBatchKMeans
+	kmeans = MiniBatchKMeans(n_clusters=1000, random_state=0).fit(X)
+	klabel=kmeans.labels_
+	df_major['klabel']=klabel
+
+	cols = list(df_major)
+	cols.insert(78, cols.pop(cols.index('Label')))
+	df_major = df_major.loc[:, cols]
+
+	def typicalSampling(group):
+		name = group.name
+		frac = 0.008
+		return group.sample(frac=frac)
+
+	result = df_major.groupby(
+    	'klabel', group_keys=False
+	).apply(typicalSampling)
+
+	result = result.drop(['klabel'],axis=1)
+	result = pd.concat([result, df_minor], ignore_index=True)
+	result.to_csv('SAMPLED.csv',index=0)
+
+	df = pd.read_csv('SAMPLED.csv')
 
 	# Split
 	X = df.drop(['Label'], axis=1)
@@ -368,7 +414,6 @@ def lccde():
 	# Save experiment to database
 	new_exp = Experiment(
 		experiment_name = f"LCCDE-{run_id}",
-
 		status = 'completed'
 	)
 	db.session.add(new_exp)
@@ -389,10 +434,10 @@ def lccde():
 		Metric(experiment_id=new_exp.experiment_id, metric_name='catboost_avg_f1', metric_value=float(cb_f1.mean()))
 	])
 	
-	# Save parameters
+	# Save parameters (clusters and SMOTE)
 	parameters = [
 		Parameter(experiment_id=new_exp.experiment_id, param_name='clusters', param_value=str(clusters)),
-		Parameter(experiment_id=new_exp.experiment_id, param_name='smote_samples', param_value=str(smote_samples))
+		Parameter(experiment_id=new_exp.experiment_id, param_name='smote_samples', param_value=str(smote_samples) if smote_samples else 'None')
 	]
 	
 	db.session.add_all(metrics)
