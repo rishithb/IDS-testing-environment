@@ -35,19 +35,23 @@
           <div class="col-md-4">
             <label class="form-label">ML model</label>
             <select class="form-select">
-              <option>Select Model</option>
+              <option>LCCDE</option>
             </select>
           </div>
 
-          <div class="col-md-4">
-            <label class="form-label">Model Parameters</label>
-            <select class="form-select">
-              <option>Model Parameters</option>
-            </select>
+          <div class="mt-4" >
+            <label class="form-label">K-means clusters </label>
+            <input type="text" id="kmeans" class="form-control" placeholder="(default 1000)" />            
+          </div>
+
+           <div class="mt-4" id="smote-div">
+            <label class="form-label">SMOTE (Synthetic sampling to balance dataset) </label>
+            <input type="checkbox" id="smote-check" class="form-check-input" />
+            <input type="text" id="smote" class="form-control" placeholder="(default 1000)" style="display: none;" />      
           </div>
         </div>
         <div class="text-center mt-4">
-          <button class="btn btn-dark px-4">
+          <button class="btn btn-dark px-4 run-button">
             Run Experiment
           </button>
         </div>
@@ -73,6 +77,10 @@
           <div class="chart-container" style="position: relative; height:300px; width:100%;"><strong>Performance</strong>
             <canvas id="performanceChart"></canvas>
           </div>
+          <!--
+          <div class="chart-container" style="position: relative; height:400px; width:100%; margin-top: 20px;"><strong>Sub Performance</strong>
+            <canvas id="subPerformanceChart"></canvas>
+          </div>-->
       </div>
 
       <!-- Experiment History -->
