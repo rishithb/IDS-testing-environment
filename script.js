@@ -107,6 +107,9 @@ function handleRunExperiment() {
     /*if (!validateInputs()) {
         return;
     } */
+   // Disable button and show loading state
+    window.runButton.disabled = true;
+    window.runButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Running...';
 
     const experimentData = {
         dataset: 'CICIDS2017_sample_km.csv', // window.datasetInput.value,
@@ -129,6 +132,9 @@ function handleRunExperiment() {
     }).then(function(response) {
         if (response.status !== 200) {
             console.log('Response status not 200:', response.status);
+            // Reset button on error
+            window.runButton.disabled = false;
+            window.runButton.innerHTML = 'Run Experiment';
             return ;
         }
         console.log('Response received from backend');
@@ -147,9 +153,16 @@ function handleRunExperiment() {
             */
             console.log('Metrics:', results_json);
             updateResults(results_json);
+            // Reset button after results are updated
+            window.runButton.disabled = false;
+            window.runButton.innerHTML = 'Run Experiment';
         });
-    })
-
+    }).catch(function(error) {
+        console.error('Error running experiment:', error);
+        // Reset button on error
+        window.runButton.disabled = false;
+        window.runButton.innerHTML = 'Run Experiment';
+    });
     
 
     // TODO: Replace with actual API call
@@ -217,7 +230,7 @@ function clearPerformanceComparison() {
 }
 
 // Update results section
-function updateResults(metrics) {
+async function updateResults(metrics) {
     const resultsDiv = document.querySelector('.card:nth-of-type(2)');
     const modelName = document.querySelector('select').value;
     
@@ -239,9 +252,9 @@ function updateResults(metrics) {
         ...metrics
     });
 
-    // Update both history and chart
-    updateExperimentHistory();
-    updatePerformanceComparison();
+    // Update history first, then chart (both are async)
+    await updateExperimentHistory();
+    await updatePerformanceComparison();
 }
 
 // Chart reference
@@ -428,6 +441,25 @@ async function updatePerformanceComparison() {
     });
 
     if (selectedExperiments.length === 0) return;
+     // If only one experiment is selected, populate parameter inputs
+    if (selectedExperiments.length === 1) {
+        const experiment = selectedExperiments[0];
+        const clustersParam = experiment.parameters.find(p => p.param_name === 'clusters')?.param_value;
+        const smoteParam = experiment.parameters.find(p => p.param_name === 'smote_samples')?.param_value;
+        
+        if (clustersParam) {
+            window.kMeans.value = clustersParam;
+        }
+        if (smoteParam && smoteParam !== 'None') {
+            window.smoteCheck.checked = true;
+            window.smoteCount.style.display = 'block';
+            window.smoteCount.value = smoteParam;
+        } else {
+            window.smoteCheck.checked = false;
+            window.smoteCount.style.display = 'none';
+            window.smoteCount.value = '';
+        }
+    }
 
     // Define colors for different runs
     const colors = [
@@ -651,5 +683,5 @@ async function updatePerformanceComparison() {
     }; */
 
     performanceChart = new Chart(ctx, config);
-    subPerformanceChart = new Chart(sub_ctz, subConfig);
+    //      subPerformanceChart = new Chart(sub_ctz, subConfig);
 }
